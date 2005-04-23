@@ -11,7 +11,7 @@
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation; either version 1, or (at your option)
+;; the Free Software Foundation; either version 2, or (at your option)
 ;; any later version.
 
 ;; This program is distributed in the hope that it will be useful,
@@ -20,18 +20,12 @@
 ;; GNU General Public License for more details.
 
 ;; A copy of the GNU General Public License can be obtained from this
-;; program's author (send electronic mail to
-;; andyetitmoves@gmail.com) or from the Free Software Foundation,
-;; Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-
-;; LCD Archive Entry:
-;; libmpdee|R.Ramkumar|andyetitmoves@gmail.com
-;; |Client end library for mpd, a music playing daemon
-;; |$Date$|$Revision$|~/packages/libmpdee.el
+;; program's author (send electronic mail to andyetitmoves@gmail.com)
+;; or from the Free Software Foundation, Inc.,
+;; 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 ;;; Commentary:
 
-;;
 ;; This package is a client end library to the wonderful music playing daemon by
 ;; name mpd. Hence, an obvious prerequisite for this package is mpd itself,
 ;; which you can get at http://www.musicpd.org. For those who haven't heard of
@@ -117,7 +111,8 @@ server replies. See `mpd-conn-new' for more details.")
   (or val (setq val '(nil nil nil)))
   (let ((val val))
     (and (listp val)
-	 (or (car val) (setcar val "localhost"))
+	 (or (car val)
+	     (setcar val (or (getenv "MPD_HOST") "127.0.0.1")))
 	 (setq val (cdr val))
 	 (or (car val) (setcar val 6600))
 	 (setq val (cdr val))
@@ -944,9 +939,9 @@ CONN and FOREACH are as in `mpd-get-songs'."
   (or (functionp foreach) (setq foreach nil))
   (mpd-execute-command
    conn "playlist" '(lambda (conn cell)
-		     (setq foreach (mpd-elt-add
-				    (cdr cell) foreach
-				    (string-to-number (car cell))))))
+		      (setq foreach (mpd-elt-add
+				     (cdr cell) foreach
+				     (string-to-number (car cell))))))
   (safe-nreverse foreach))
 
 ;;;###autoload
