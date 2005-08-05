@@ -674,7 +674,7 @@ state, and 'command-list to indicate being in command-list mode."
 
 (eval-and-compile
   (defconst mpd-status-data ["volume" "repeat" "random" "playlist" "playlistlength"
-			     "bit-rate" "song" "xfade" "state" "time-elapsed"
+			     "bitrate" "song" "xfade" "state" "time-elapsed"
 			     "time-total" "sample-rate" "bits-per-sample"
 			     "channels" "error"]
     "Descriptions of the status vector received by a call to `mpd-get-status'.
