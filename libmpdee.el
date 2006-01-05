@@ -1,6 +1,6 @@
 ;;; LIBMPDEE.EL --- Client end library for mpd, a music playing daemon
 
-;; Copyright (C) 2004, 2005 R.Ramkumar
+;; Copyright (C) 2004, 2005, 2006 R.Ramkumar
 
 ;; Author: 	R.Ramkumar <andyetitmoves@gmail.com>
 ;; Created: 	10 May 2004
@@ -64,7 +64,9 @@
 ;;      the functions per se.
 
 ;; Most of the functions below require a connection object as an argument, which
-;; you can create by a call to `mpd-new-connection'.
+;; you can create by a call to `mpd-new-connection'. The recommended way to use
+;; customization to choose parameters for mpd connections is to use the widget
+;; `mpd-connection'.
 
 ;; The interface has changed since version 1 of this library and there is no
 ;; backward compatibility. This change applies to functions which returned
