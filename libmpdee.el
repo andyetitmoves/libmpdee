@@ -4,7 +4,7 @@
 
 ;; Author: 	R.Ramkumar <andyetitmoves@gmail.com>
 ;; Created: 	10 May 2004
-;; Version: 	2.0
+;; Version: 	2.1
 ;; Keywords:	music, mpd
 
 ;; This file is *NOT* part of GNU Emacs
@@ -68,12 +68,6 @@
 ;; customization to choose parameters for mpd connections is to use the widget
 ;; `mpd-connection'.
 
-;; The interface has changed since version 1 of this library and there is no
-;; backward compatibility. This change applies to functions which returned
-;; vector whose descriptions were given `*-data' variables. Such functions have
-;; been modified to return property lists, whose keys now describe the values
-;; returned. This should hopefully be a much more scalable representation.
-
 ;; As this package caters to developers, it should be helpful to browse the file
 ;; in order for atleast the functions and the documentation. The file is well
 ;; structured and documented, so go for it. The impatient could do a selective
@@ -89,16 +83,32 @@
 ;;         M-x customize-group mpd
 ;; to change the values to your liking.
 
+
+;;; History: (See the SVN logs/ChangeLog for the list of all changes)
+
+;; v2.1
+;; Introducing automatic mode with hooking, for connections.
+;; See `mpd-set-automatic-mode'.
+
+;; v2.0
+;; The interface has changed since version 1 of this library and there is no
+;; backward compatibility. This change applies to functions which returned
+;; vector whose descriptions were given `*-data' variables. Such functions have
+;; been modified to return property lists, whose keys now describe the values
+;; returned. This should hopefully be a much more scalable representation.
+
 ;;; Code:
 
-(defvar libmpdee-version "2.0"
+(defvar libmpdee-version "2.1"
   "libmpdee version information.")
 
 ;;;; User serviceable variable(s).
 
 (require 'custom)
+(require 'wid-edit)
 
 (defun widget-mpd-format-handler (widget esc)
+  "Widget format handler for the MPD connection widget."
   (cond
    ((eq esc ?l)
     (widget-create-child-and-convert widget 'documentation-string "\
@@ -111,6 +121,8 @@ server replies. See `mpd-conn-new' for more details.")
 	       widget esc))))
 
 (defun mpd-connection-tidy (val)
+  "Initialize unset parameters for a MPD connection.
+Replace parameters in the MPD connection VAL with sane defaults and return."
   (or val (setq val '(nil nil nil)))
   (let ((val val))
     (and (listp val)
@@ -142,7 +154,7 @@ server replies. See `mpd-conn-new' for more details.")
   :link '(emacs-commentary-link "libmpdee"))
 
 (defcustom mpd-db-root (getenv "MPD_DB_ROOT")
-  "*MPD database directory root"
+  "*MPD database directory root."
   :type 'directory :group 'mpd)
 
 (defcustom mpd-interactive-connection-parameters (mpd-connection-tidy nil)
@@ -182,7 +194,7 @@ Most lines in interactive displays are split into two fields."
 ;;;; Package independent helper functions.
 
 (defmacro assert-type (obj func)
-  "Ensure that OBJ tests succeeds for type checking predicate FUNC.
+  "Ensure that OBJ succeeds on type checking with predicate FUNC.
 The function emits a \"Wrong type argument\" signal on failure.
 Note that the arguments are evalled twice in this process."
   `(or (,func ,obj) (signal 'wrong-type-argument (list (quote ,func) ,obj))))
@@ -197,7 +209,7 @@ Return nil if there are any unmatched characters.
 Allow negative numbers if ALLOWNEG is non-nil."
   (let ((num (string-to-number str)))
     (and (if allowneg (numberp num) (wholenump num))
-	 (string= str (number-to-string num)) num)))
+	 (string-equal str (number-to-string num)) num)))
 (put 'string-to-number-strict 'side-effect-free t)
 
 (defun get-lines (str)
@@ -278,7 +290,7 @@ Return (STR . nil) on a parse failure."
 	  ;; so place start a character beyond end of match.
 	  (setq start (1+ (match-end 0)))
 	  (setq str (replace-match "\\\\\\&" t nil str)))
-	(if (string-match " " str) (concat " \"" str "\"") str))))
+	(if (string-match " " str) (concat "\"" str "\"") str))))
 
 ;;; (defun mpd-log (fmt &rest args)
 ;;;   (write-region (concat (apply 'format fmt args) "\n") nil "~/mpd.log" t 1))
@@ -305,11 +317,11 @@ Return (STR . nil) on a parse failure."
 ;;;                server after the commandlist gets over.
 ;;; 5 : last-command-result-flag - t if OK, nil if ACK.
 ;;; 6 : timeout - The timeout used for replies from server.
-;;; 7 : host - The name of the host in this connection, used for auto-reconnecting.
-;;; 8 : port number - The port number, also for auto-reconnecting.
-;;; 9 : noreconn - nil if reconnection should be tried on a broken connection.
+;;; 7 : host - The name of the host used to connect to mpd.
+;;; 8 : port number - The port number of mpd.
+;;; 9 : automode - not of the noauto argument to `mpd-conn-new'.
 
-;; Don't expose these macros, unless required so.
+;; Don't expose these macros, unless required.
 (eval-when-compile
   (defmacro _mpdgv () `(aref conn 0))
   (defmacro _mpdsv (val) `(aset conn 0 ,val))
@@ -329,8 +341,8 @@ Return (STR . nil) on a parse failure."
   (defmacro _mpdsh (val) `(aset conn 7 ,val))
   (defmacro _mpdgp () `(aref conn 8))
   (defmacro _mpdsp (val) `(aset conn 8 ,val))
-  (defmacro _mpdgr () `(aref conn 9))
-  (defmacro _mpdsr (val) `(aset conn 9 ,val)))
+  (defmacro _mpdga () `(aref conn 9))
+  (defmacro _mpdsa (val) `(aset conn 9 ,val)))
 
 ;;;; Sanity check functions.
 
@@ -362,8 +374,9 @@ Return (STR . nil) on a parse failure."
 (defun mpd-end-conn (conn fmt &rest args)
   "Abort mpd conection CONN and signal error.
 `format' error message using FMT and ARGS."
-  (delete-process (_mpdgo))
-  (_mpdso nil)
+  (when (_mpdgo)
+    (delete-process (_mpdgo))
+    (_mpdso nil))
   (signal 'error (list (apply 'format fmt args))))
 
 (defun mpd-end-cmd (conn fmt &rest args)
@@ -455,14 +468,14 @@ the output. This is an internal function, do not use this in your code."
 
 ;;;; Low level public interface.
 
-(defun mpd-conn-new (host port &optional timeout noreconn)
+(defun mpd-conn-new (host port &optional timeout noauto)
   "Construct a mpd connection object from given parameters.
-No connection is established, use `mpd-connect' for the same. Connections made
-using this object are made to host HOST at port number PORT. TIMEOUT is a
-floating-point value specifying the number of seconds to wait before giving up
-waiting for a reply from the server. Unspecified or zero TIMEOUT correspond to
-infinite timeout. If NORECONN is non-nil, no reconnection is attempted if the
-connection breaks."
+Connections made using this object are made to host HOST at port number PORT.
+TIMEOUT is a floating-point value specifying the number of seconds to wait
+before giving up waiting for a reply from the server. Unspecified or zero
+TIMEOUT correspond to infinite timeout. Set automatic mode if NOAUTO is nil,
+hooked automatic function if NOAUTO is a function, and do not set automatic mode
+otherwise. See `mpd-set-automatic-mode' for a description of automatic mode."
   (or (and (stringp host) (wholenump port) (or (not timeout) (numberp timeout)))
       (error "Invalid parameters passed for making new connection"))
   (and timeout
@@ -472,7 +485,7 @@ connection breaks."
   ;; Declaration conn object structure dependent.
   (vector (make-vector mpd-ver-string-length nil) nil
 	  "" nil "" nil (and timeout (floor (* timeout 1000)))
-	  host port noreconn))
+	  host port (if noauto (if (functionp noauto) noauto nil) t)))
 
 (eval-when-compile
   (or (fboundp 'set-process-query-on-exit-flag)
@@ -481,7 +494,8 @@ connection breaks."
 
 (defun mpd-connect (conn)
   "Connect to the mpd server using the connection object CONN.
-The connection object is constructed using `mpd-conn-new'."
+The connection object is constructed using `mpd-conn-new'.
+Close the connection using `mpd-close-connection' when you are done."
   (let (proc rt welc)
     (setq proc (or (open-network-stream "mpd" nil (_mpdgh) (_mpdgp))
 		   (error "Unable to open connection with mpd")))
@@ -497,7 +511,8 @@ The connection object is constructed using `mpd-conn-new'."
       (or (_mpdgf)
 	  (mpd-end-conn conn "Handshake failed, server returned: %s" (_mpdgs))))
     (setq welc (_mpdgs))
-    (or (string= (substring welc 0 (mpd-welcome-length)) mpd-welcome-message)
+    (or (string-equal (substring welc 0 (mpd-welcome-length))
+		      mpd-welcome-message)
 	(mpd-end-conn conn "Process mpd not running on port %d in host \"%s\""
 		      (_mpdgp) (_mpdgh)))
     (let ((verlist (split-string (substring welc (mpd-welcome-length))
@@ -513,13 +528,30 @@ The connection object is constructed using `mpd-conn-new'."
 	  (setq i (1+ i))))))
   (message "Opened connection with mpd"))
 
-(defun mpd-new-connection (host port &optional timeout noreconn)
-  "Create a new connection with the mpd server.
+(make-obsolete 'mpd-new-connection "use `mpd-conn-new' to create a connection \
+object. If automatic mode is not used, a call to `mpd-connect' might be \
+necessary." "2.1")
+(defun mpd-new-connection (host port &optional timeout noauto)
+  "Create a new connection and connect using it to the mpd server.
 Return a connection object, which could be used for further transactions with
 the server. See `mpd-conn-new' for a description of the parameters. Close the
-connection using `mpd-close-connection' when you no longer need it."
-  (let ((conn (mpd-conn-new host port timeout noreconn)))
+connection using `mpd-close-connection' when you are done.
+
+This function is deprecated since version 2.1.
+Use `mpd-conn-new' to create a connection object.
+If automatic mode is not used, a call to `mpd-connect' might be necessary."
+  (let ((conn (mpd-conn-new host port timeout noauto)))
     (mpd-connect conn) conn))
+
+(defun mpd-conn-wakeup (conn)
+  "Tries to ensure that the MPD connection is alive, when in automatic mode."
+  (mpd-assert-idle conn)
+  (when (and (not (and (_mpdgo) (eq (process-status (_mpdgo)) 'open)))
+	     (_mpdga) (not (and (functionp (_mpdga))
+				(funcall (_mpdga) conn 'pre))))
+    (and (_mpdgo) (message "Connection with mpd broken, attempting reconnect"))
+    (mpd-connect conn)
+    (and (functionp (_mpdga)) (funcall (_mpdga) conn 'post))))
 
 (defun mpd-execute-command (conn cmd &optional mode)
   "Send the command CMD to the mpd server using CONN.
@@ -532,14 +564,11 @@ following values:
  - t, by which all output before the last line, as a string,
    is the output of the function.
  - A function, by which each cons-cell, got as described above, is sent to
-   this function.  Two parameters are passed to the function, the connection
-   object and this cons-cell.  An empty string is the output.
+   this function. Two parameters are passed to the function, the connection
+   object and this cons-cell. An empty string is the output.
 Return a cons-cell, whose car is non-nil if the server succeeds, and cdr is the
 output as specified in the description of MODE above."
-  (mpd-assert-idle conn)
-  (unless (or (and (_mpdgo) (eq (process-status (_mpdgo)) 'open)) (_mpdgr))
-    (and (_mpdgo) (message "Connection with mpd broken, attempting reconnect"))
-    (mpd-connect conn))
+  (mpd-conn-wakeup conn)
   (mpd-transact conn mode (concat cmd "\n"))
   (prog1
       (cons (_mpdgf)
@@ -560,8 +589,9 @@ failure. See also `mpd-execute-command'."
 (defun mpd-close-connection (conn)
   "Close the mpd server connection given by CONN."
   (mpd-assert-idle conn)
-  (delete-process (_mpdgo))
-  (_mpdso nil))
+  (when (_mpdgo)
+    (delete-process (_mpdgo))
+    (_mpdso nil)))
 
 (defvar mpd-inter-conn
   (apply 'mpd-conn-new `(,@(mpd-connection-tidy
@@ -605,25 +635,52 @@ See also `mpd-new-connection'."
     (and (= timeout 0) (setq timeout nil))
     (_mpdst timeout)))
 
-(defsubst mpd-get-reconnectible (conn)
-  "Return t if CONN reconnects when its mpd connection breaks."
+(defsubst mpd-get-automatic-mode (conn)
+  "Return the automatic mode value for mpd connection CONN.
+See `mpd-set-automatic-mode' for a description of automatic mode. Return value
+is like the MODE parameter of that function."
   (assert-mpd-conn conn)
-  (not (_mpdgr)))
-(put 'mpd-get-reconnectible 'side-effect-free t)
+  (_mpdga))
+(put 'mpd-get-automatic-mode 'side-effect-free t)
 
+(defsubst mpd-set-automatic-mode (conn mode)
+  "Set the automatic mode for mpd connection CONN.
+Set automatic mode iff MODE is non-nil. Set to hooked automatic mode if the
+non-nil MODE is a function.
+
+The connection is said to be in automatic mode if it connects on demand (usually
+as a result of a server request using the connection) and takes care of
+reconnecting whenever the connection gets broken. The automatic mode could be
+hooked by specifying a function. In this case, the function is called with two
+parameters, the connection object and the second parameter being the symbol 'pre
+or 'post. The function is called with 'pre when reconnection is needed. If the
+function returns a non-nil value, it is assumed that the function has done the
+reconnection. Else, the library reconnects by itself, and the function is once
+again called after that, with the parameter 'post (Return value is ignored)."
+  (assert-mpd-conn conn)
+  (_mpdsa mode))
+
+(make-obsolete 'mpd-get-reconnectible 'mpd-get-automatic-mode "2.1")
+(defalias 'mpd-get-reconnectible 'mpd-get-automatic-mode
+  "Return t if CONN reconnects when its mpd connection breaks.
+This function is deprecated since version 2.1.
+Use `mpd-get-automatic-mode' instead.")
+
+(make-obsolete 'mpd-make-reconnectible 'mpd-set-automatic-mode "2.1")
 (defsubst mpd-make-reconnectible (conn &optional noreconn)
   "Make CONN reconnectible when its mpd connection breaks.
-Unset the reconnectibility on non-nil prefix arg NORECONN."
-  (assert-mpd-conn conn)
-  (_mpdsr noreconn))
+Unset the reconnectibility on non-nil prefix arg NORECONN.
+This function is deprecated since version 2.1.
+Use `mpd-set-automatic-mode' instead."
+  (mpd-set-automatic-mode conn (not noreconn)))
 
 (defun mpd-force-accept-command (conn)
   "Force the mpd connection CONN to accept the next command.
-*WARNING* DON'T use this unless you are really desperate.  Shelf this off for
+*WARNING* DON'T use this unless you are really desperate. Shelf this off for
 debugging purposes. Normally, the package should signal correctly whether it is
-safe to receive the next command. Doing this would mean losing out on the output
-of the current command, and worse, the output of the aborted command could creep
-into the current one."
+safe to receive the next command. Doing this would mean losing out on the
+output of the current command, and worse, the output of the aborted command
+could creep into the current one."
   (if (mpd-command-list-mode-p conn)
       (error "Command list mode has not ended")
     (_mpdsf nil)
@@ -635,7 +692,7 @@ into the current one."
 Only commands that can be used with `mpd-simple-exec' are allowed in
 command-list mode. Commands can be issued as they are usually done.
 Always return t, as the commands are queued up and not sent to the server.
-`mpd-command-list-end' ends the command-list and execute the list built up."
+`mpd-command-list-end' ends the command-list and executes the list built up."
   (mpd-assert-idle conn)
   (_mpdsf nil)				; FIXME: Why is this here ??
   (_mpdss nil))
@@ -693,9 +750,10 @@ state, and 'command-list to indicate being in command-list mode."
 See `mpd-execute-command' for a description of output handlers.
 This is an internal function, do not use this in your code."
   (let ((key (car cell)))
-    (when (plist-get mpd-song-receiver (intern key))
-      (setq foreach (apply 'mpd-seq-add mpd-song-receiver
-			   foreach mpd-song-receiver-args))
+    (when (string-equal key "file")
+      (when (plist-get mpd-song-receiver 'file)
+	(setq foreach (apply 'mpd-seq-add mpd-song-receiver
+			     foreach mpd-song-receiver-args)))
       (setq mpd-song-receiver nil))
     (setq mpd-song-receiver
 	  (plist-put mpd-song-receiver (intern key)
@@ -707,10 +765,11 @@ This is an internal function, do not use this in your code."
 Use command CMD to get the songs. Call function FOREACH, if specified, for each
 song, with the song provided as the argument. Return list of all songs if
 FOREACH is not specified and FOREACH otherwise. When a list is returned, each
-element of the list is a property list, the known keys being `file', `Artist',
-`Album', `Track', `Title', `Time', `Pos' and `Id'. The last three keys have
-integers as their value. `Time' refers to the total length of the song. `Pos'
-and `Id' are present only when the song retrieved is a part of a playlist."
+element of the list is a property list, some known keys being `file', `Pos' and
+`Id'. The last two keys, along with `Time' if present, have integers as their
+value. `Time' refers to the total length of the song. `Pos' and `Id' are present
+only when the song retrieved is a part of a playlist. Other song tag data might
+be present as well."
   (or (functionp foreach) (setq foreach nil))
   (let (mpd-song-receiver mpd-song-receiver-args)
     (mpd-execute-command conn cmd 'mpd-song-receiver)
@@ -721,7 +780,7 @@ and `Id' are present only when the song retrieved is a part of a playlist."
 (defun mpd-make-cmd-concat (cmd arg &optional normal-nil)
   "Make mpd command string using command CMD and argument ARG.
 ARG could be a string or a list of strings. If NORMAL-NIL is non-nil, do nothing
-if ARG is `nil', and output CMD for `nil' NORMAL-NIL and ARG. Use command list
+if ARG is nil, and output CMD for nil NORMAL-NIL and ARG. Use command list
 mode implicitly for lists. Sanitize arguments before composition.
 This is an internal function, do not use this in your code."
   (cond
@@ -763,7 +822,8 @@ This is an internal function, do not use this in your code."
       (display-buffer (current-buffer)))))
 
 (defsubst mpd-separator-line (&optional num)
-  "Make a separator line for insertion to the mpd output buffer."
+  "Make a separator line for insertion to the mpd output buffer.
+The number of columns used is 80, unless specified using NUM."
   (propertize (concat (make-string (or num 80) ?*) "\n")
 	      'face 'mpd-separator-face))
 
@@ -779,39 +839,47 @@ Layout as follows:
     (with-current-buffer (get-buffer-create "*mpd-output*")
       (erase-buffer)
       (insert
-       (concat "\n" (and str1 (not (string= str1 ""))
+       (concat "\n" (and str1 (not (string-equal str1 ""))
 			 (propertize (concat str1 "\n") 'face 'mpd-header-face))
 	       (and str1 (mpd-separator-line max))
 	       (and str2 (propertize (concat str2 "\n") 'face 'mpd-header-face))
 	       (and str3 (mpd-separator-line max))
-	       (and str3 (not (string= str3 ""))
+	       (and str3 (not (string-equal str3 ""))
 		    (propertize (concat str3 "\n")
 				'face 'mpd-header-face)) "\n")))))
 
 (defun mpd-render-field (desc val &optional nosep)
   "Format to a colorized line of form \"\\nDESC: VAL\".
 Output the separating colon unless NOSEP is non-nil."
-  (and val (not (string= val ""))
+  (and val (not (string-equal val ""))
        (concat (propertize desc 'face 'mpd-first-field-face)
 	       (and (not nosep) ": ")
 	       (propertize val 'face 'mpd-second-field-face) "\n")))
 (put 'mpd-render-field 'side-effect-free t)
 
+(defconst mpd-display-song-key-table
+  '((Time "Length" " seconds")
+    (file "Filename")
+    (Pos)
+    (Id)))
+
 (defun mpd-display-song (song)
   "Display mpd song data SONG in the output buffer."
-  (and song
-       (mpd-line-to-buffer
-	(concat (mpd-render-field "Title       " (plist-get song 'Title))
-		(mpd-render-field "Artist      " (plist-get song 'Artist))
-		(mpd-render-field "Album       " (plist-get song 'Album))
-		(mpd-render-field "Track       " (plist-get song 'Track))
-		(mpd-render-field
-		 "Song Length "
-		 (and (plist-get song 'Time)
-		      (concat (number-to-string (plist-get song 'Time))
-			      " seconds.")))
-		(mpd-render-field "Filename    " (plist-get song 'file))
-		"\n" (mpd-separator-line)))))
+  (when song
+    (let ((sptr song) (str "") key value entry trans suffix)
+      (while sptr
+	(setq key (car sptr))
+	(setq value (cadr sptr))
+	(when (and key value)
+	  (setq entry (assq key mpd-display-song-key-table))
+	  (setq trans (if entry (cadr entry) (symbol-name key)))
+	  (setq suffix (or (nth 2 entry) ""))
+	  (when trans
+	    (setq str (concat str (mpd-render-field
+				   (format "%-13s" trans)
+				   (format "%s%s" value suffix))))))
+	(setq sptr (cddr sptr)))
+      (mpd-line-to-buffer (concat str "\n" (mpd-separator-line))))))
 
 (defun mpd-display-playlist-item (title num)
   "Display playlist item with TITLE and index NUM in mpd buffer."
@@ -835,8 +903,8 @@ Output the separating colon unless NOSEP is non-nil."
 	   "\n" (mpd-separator-line))))
 
 (defsubst mpd-display-bullet (str)
-  "Display a bulleted line to the mpd output buffer"
-  (mpd-line-to-buffer (mpd-render-field "o " str t)))
+  "Display a bulleted line to the mpd output buffer."
+  (mpd-line-to-buffer (mpd-render-field " o " str t)))
 
 (defun read-item (prompt &optional default zero allowneg)
   "Read a number from the minibuffer.
@@ -866,17 +934,18 @@ This is an internal function, do not use this in your code."
      ((member sym '("volume" "repeat" "random" "playlist" "playlistlength"
 		    "bitrate" "song" "songid" "xfade" "updating_db"))
       (put lsym (intern sym) (string-to-number (cdr cell))))
-     ((string= sym "state")
+     ((string-equal sym "state")
       (and (member (cdr cell) '("play" "pause" "stop"))
 	   (put lsym (intern sym) (intern (cdr cell)))))
-     ((string= sym "time")
+     ((string-equal sym "time")
       (when (string-match "^\\([0-9]*\\):\\([0-9]*\\)$" (cdr cell))
 	(put lsym 'time-elapsed (string-to-number (match-string 1 (cdr cell))))
 	(put lsym 'time-total (string-to-number (match-string 2 (cdr cell))))))
-     ((string= sym "audio")
+     ((string-equal sym "audio")
       (when (string-match "^\\([0-9]*\\):\\([0-9]*\\):\\([0-9]*\\)$" (cdr cell))
 	(put lsym 'sample-rate (string-to-number (match-string 1 (cdr cell))))
-	(put lsym 'bits-per-sample (string-to-number (match-string 2 (cdr cell))))
+	(put lsym 'bits-per-sample
+	     (string-to-number (match-string 2 (cdr cell))))
 	(put lsym 'channels (string-to-number (match-string 3 (cdr cell))))))
      ;; currently only "error"
      (t (put lsym (intern sym) (cdr cell))))))
@@ -905,7 +974,7 @@ of MPD used. Some of the less obvious descriptions are:
 |updating_db|The updating job id, displayed when there is a update taking      |
 |           |place.                                                            |
 +-----------+------------------------------------------------------------------+
-|  error    |A description of the error, if one occurs.  Could be nil, in case |
+|  error    |A description of the error, if one occurs. Could be nil, in case  |
 |           |there is no error.                                                |
 +-----------+------------------------------------------------------------------+
 
@@ -960,11 +1029,10 @@ CONN and FOREACH are as in `mpd-get-songs'."
 ;;;###autoload
 (defun mpd-get-playlist-entry (conn &optional item foreach use-id)
   "Get song data for entr(y/ies) ITEM in the current mpd playlist.
-CONN and FOREACH are as in `mpd-get-songs'. ITEM is the item position/id or a
-list of it. Note that ITEM as `nil' outputs for all entries in the current
-playlist rather than not doing this. Interpret ITEM as song id(s) iff USE-ID is
-non-nil. Return the list of songs or FOREACH depending on the value of FOREACH
-provided."
+CONN, FOREACH and the return value are as in `mpd-get-songs'.
+ITEM is the item position/id or a list of it. Note that ITEM as nil outputs
+for all entries in the current playlist rather than not doing anything.
+Interpret ITEM as song id(s) iff USE-ID is non-nil."
   (interactive
    (let ((item (read-item "Enter item number"
 			  (plist-get (mpd-get-status mpd-inter-conn) 'song))))
@@ -978,20 +1046,34 @@ provided."
 	     '(lambda (item item2) (assert-wholenump item))
 	     item) use-id) foreach))
 
-(defun mpd-get-playlist-changes (conn version &optional foreach)
+;;;###autoload
+(defun mpd-get-current-song (conn &optional foreach)
+  "Get song data for the current song in mpd.
+CONN and FOREACH are as in `mpd-get-songs'. Return FOREACH if specified, and
+the current song (see `mpd-get-songs' for how a song is represented) otherwise."
+  (interactive (progn (mpd-init-buffer "" "Current MPD Song" "")
+		      (list mpd-inter-conn 'mpd-display-song)))
+  (setq foreach (mpd-get-songs conn "currentsong" foreach))
+  (or (functionp foreach) (setq foreach (car foreach))) foreach)
+
+(defun mpd-get-playlist-changes (conn version &optional foreach nometa)
   "Get a list of changed song entries in the current mpd playlist.
-CONN and FOREACH are as in `mpd-get-songs'. Calculate the change between the
-current playlist and the playlist with version number VERSION."
+CONN, FOREACH and the return value are as in `mpd-get-songs'.
+Calculate the change between the current playlist and the playlist
+with version number VERSION. Do not fetch complete metadata (only position and
+song id is returned for each song) if NOMETA is non-nil."
   (assert-numberp version)
-  (mpd-get-songs conn (format "plchanges %d" version) foreach))
+  (mpd-get-songs conn (format "%s %d" (if nometa "plchangesposid" "plchanges")
+			      version) foreach))
 
 ;;;###autoload
 (defun mpd-get-directory-songs (conn &optional directory foreach)
   "Get all songs in a directory of the mpd database.
-CONN and FOREACH are as in `mpd-get-songs'. DIRECTORY is the relative directory
-path wrt the database root. DIRECTORY could be a list as well, the action then
-corresponds to all songs in all the directories. Note that the `nil' value for
-DIRECTORY corresponds to the database toplevel rather than an empty list."
+CONN, FOREACH and the return value are as in `mpd-get-songs'.
+DIRECTORY is the relative directory path wrt the database root.
+DIRECTORY could be a list as well, the action then corresponds to all songs
+in all the directories. Note that the nil value for DIRECTORY corresponds
+to the database toplevel rather than an empty list."
   (interactive
    (let ((str (read-string "Enter relative directory: ")))
      (progn (mpd-init-buffer "" (concat "Songs in directory " str) "")
@@ -1007,7 +1089,7 @@ if specified, with each information field. The arguments passed to FOREACH is a
 song object, directory string or playlist string and one of the symbols 'file,
 'playlist or 'directory describing the data sent. DIRECTORY could be a list as
 well, the action then corresponds information for all the directories. Note that
-a `nil' for DIRECTORY corresponds to the database toplevel rather than an empty
+a nil for DIRECTORY corresponds to the database toplevel rather than an empty
 list. Return FOREACH, if non-nil; else a vector of three elements: a list of
 songs in the directory (see `mpd-get-songs' for how a song is represented),
 a list of playlists and a list of subdirectories."
@@ -1021,9 +1103,9 @@ a list of playlists and a list of subdirectories."
     (mpd-execute-command
      conn (mpd-make-cmd-concat "lsinfo" directory)
      '(lambda (conn cell)
-	(if (string= (car cell) "directory")
+	(if (string-equal (car cell) "directory")
 	    (setq dir (mpd-elt-add (cdr cell) dir 'directory))
-	  (if (string= (car cell) "playlist")
+	  (if (string-equal (car cell) "playlist")
 	      (setq pl (mpd-elt-add (cdr cell) pl 'playlist))
 	    (mpd-song-receiver conn cell)))))
     (and mpd-song-receiver
@@ -1037,26 +1119,26 @@ a list of playlists and a list of subdirectories."
 Use CONN for the connection and use function FOREACH to report each entry,
 along with a non-nil second argument if the entry is a directory. DIRECTORY
 could be a list as well, the action then corresponds to listing of all the
-directories. Note that the `nil' value for DIRECTORY corresponds to the
+directories. Note that the nil value for DIRECTORY corresponds to the
 database toplevel rather than an empty list."
   (interactive
    (let ((str (read-string "Enter relative directory: ")))
-     (progn (mpd-init-buffer "" (concat "Recursive listing of directory " str) "")
-	    (list mpd-inter-conn 'mpd-display-dir-listing str))))
+     (progn
+       (mpd-init-buffer "" (concat "Recursive listing of directory " str) "")
+       (list mpd-inter-conn 'mpd-display-dir-listing str))))
   (assert-type foreach functionp)
   (mpd-execute-command conn (mpd-make-cmd-concat "listall" directory)
 		       '(lambda (conn cell)
-			  (funcall foreach (cdr cell) (string= (car cell)
-							       "directory")))))
+			  (funcall foreach (cdr cell)
+				   (string-equal (car cell) "directory")))))
 
 ;;;###autoload
 (defun mpd-search (conn by for &optional foreach)
   "Search for songs in the mpd database.
-Use CONN for the mpd connection, the valid values for BY are 'artist, 'album
-and 'title, indicating the field to search for, and FOR is the search string.
-FOREACH and the return values are as in `mpd-get-songs'. If FOR is a non-empty
-list; search by BY for all FOR, after using `sort-uniq-list' to sort and remove
-duplicates."
+CONN, FOREACH and the return values are as in `mpd-get-songs'.
+The valid values for BY are 'artist, 'album and 'title;
+indicating the field to search for; and FOR is the search string.
+If FOR is a non-empty list, search by BY for all FOR."
   (interactive
    (let ((reqb (intern-soft
 		(completing-read "Search by: "
@@ -1084,7 +1166,7 @@ artist names."
   (mpd-execute-command
    conn "list artist"
    '(lambda (conn cell)
-      (and (string= (car cell) "Artist")
+      (and (string-equal (car cell) "Artist")
 	   (setq foreach (mpd-elt-add (cdr cell) foreach)))))
   (safe-nreverse foreach))
 
@@ -1097,7 +1179,7 @@ FOREACH, if specified, with each name. If FOREACH is a function, return FOREACH,
 else return the list of albums."
   (interactive
    (let ((str (read-string "Name of the artist (All): ")))
-     (and (string= str "") (setq str nil))
+     (and (string-equal str "") (setq str nil))
      (mpd-init-buffer "" (if str (concat "Albums of artist " str)
 			   "List of albums") "")
      (list mpd-inter-conn str 'mpd-display-bullet)))
@@ -1105,7 +1187,7 @@ else return the list of albums."
   (mpd-execute-command
    conn (mpd-make-cmd-concat "list album" artist)
    '(lambda (conn cell)
-      (and (string= (car cell) "Album")
+      (and (string-equal (car cell) "Album")
 	   (setq foreach (mpd-elt-add (cdr cell) foreach)))))
   (safe-nreverse foreach))
 
@@ -1117,7 +1199,7 @@ else return the list of albums."
   "Enqueue filename FILE (or list of FILE) to the mpd playlist."
   (interactive
    (list mpd-inter-conn
-	 (if (and (stringp mpd-db-root) (not (string= mpd-db-root "")))
+	 (if (and (stringp mpd-db-root) (not (string-equal mpd-db-root "")))
 	     (file-relative-name
 	      (file-truename
 	       (read-file-name "Enqueue what: " mpd-db-root)) mpd-db-root)
@@ -1317,15 +1399,46 @@ Turn off cross-fading if TIME is 0."
   (assert-wholenump time)
   (mpd-simple-exec conn (format "crossfade %d" time)))
 
+(defvar mpd-inter-password-remember-queried nil)
+(defvar mpd-inter-password nil)
+
+;; For temporary binding
+(defvar mpd-inter-password-inhibit-update nil)
+
+(defun mpd-inter-password-update (conn when)
+  (when (and (eq when 'post) (not mpd-inter-password-inhibit-update))
+    (let ((passwd mpd-inter-password)
+	  (mpd-inter-password-inhibit-update t))
+      (or passwd (setq passwd (read-passwd "Enter MPD password: ")))
+      (or (mpd-set-password conn passwd)
+	  (message "Unable to set password: %s" (mpd-get-last-error conn))))))
+
 ;;;###autoload
 (defun mpd-set-password (conn pass)
   "Set the password for access to the mpd server.
-*WARNING* The password is sent to the server in plaintext.
-The processing done by libmpdee to send the command for
-setting the password also has its data as plaintext."
-  (interactive (list mpd-inter-conn (read-passwd "Enter password: ")))
+*WARNING* The password is sent to the server in plaintext. The processing done
+by libmpdee to send the command for setting the password also has its data as
+plaintext. When called interactively, offer to store and set the password on
+reconnection. Note that this is not done when the call is not interactive.
+Use hooked automatic mode (see `mpd-set-automatic-mode') to achieve the same."
+  (interactive
+   (let ((password (read-passwd "Enter password: ")))
+     ;; Prevent password update triggering for this call itself
+     ;; in case the connection is dead currently.
+     (let ((mpd-inter-password-inhibit-update t))
+       (mpd-conn-wakeup mpd-inter-conn))
+     (if mpd-inter-password-remember-queried
+	 (and mpd-inter-password (setq mpd-inter-password password))
+       (when (yes-or-no-p "Do you want the password to be set again \
+if we happen to reconnect? ")
+	 (mpd-set-automatic-mode mpd-inter-conn 'mpd-inter-password-update)
+	 (when (yes-or-no-p "Would you like me to remember your password \
+for this session, in case it needs to be set again? ")
+	   (setq mpd-inter-password password)))
+       (setq mpd-inter-password-remember-queried t))
+     (list mpd-inter-conn password)))
   (assert-string pass)
-  (mpd-simple-exec conn (concat "password" (mpd-safe-string pass))))
+  (mpd-simple-exec conn (concat "password " (mpd-safe-string pass))))
 
 (defun mpd-update-1 (conn directory)
   "Internal function instructing the mpd server to update.
@@ -1339,7 +1452,7 @@ Please use `mpd-update' for updation purposes."
 (defun mpd-update (conn &optional directory ignore-timeout)
   "Instruct the mpd server using CONN to update its database.
 DIRECTORY is the directory or a list of directories to be updated. Note that
-DIRECTORY as `nil' updates the root directory rather than not updating at all.
+DIRECTORY as nil updates the root directory rather than not updating at all.
 Ignore connection timeout, unless IGNORE-TIMEOUT is nil or the command is
 executed in command list mode. Return update job id on success."
   (interactive (list mpd-inter-conn (read-string "Enter relative directory: ")))
