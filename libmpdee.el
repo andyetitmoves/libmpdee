@@ -64,7 +64,7 @@
 ;;      the functions per se.
 
 ;; Most of the functions below require a connection object as an argument, which
-;; you can create by a call to `mpd-new-connection'. The recommended way to use
+;; you can create by a call to `mpd-conn-new'. The recommended way to use
 ;; customization to choose parameters for mpd connections is to use the widget
 ;; `mpd-connection'.
 
@@ -494,8 +494,10 @@ otherwise. See `mpd-set-automatic-mode' for a description of automatic mode."
 
 (defun mpd-connect (conn)
   "Connect to the mpd server using the connection object CONN.
-The connection object is constructed using `mpd-conn-new'.
-Close the connection using `mpd-close-connection' when you are done."
+The connection object is constructed using `mpd-conn-new'. Note that this
+function doesn't need to be explicitly called when the connection is in
+automatic mode (the default). Close the connection using `mpd-close-connection'
+when you are done."
   (let (proc rt welc)
     (setq proc (or (open-network-stream "mpd" nil (_mpdgh) (_mpdgp))
 		   (error "Unable to open connection with mpd")))
