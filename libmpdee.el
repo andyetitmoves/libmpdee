@@ -1446,25 +1446,25 @@ for this session, in case it needs to be set again? ")
   (mpd-assert-string pass)
   (mpd-simple-exec conn (concat "password " (mpd-safe-string pass))))
 
-(defun mpd-update-1 (conn directory)
+(defun mpd-update-1 (conn path)
   "Internal function instructing the mpd server to update.
 Please use `mpd-update' for updation purposes."
   (let ((output (mpd-execute-command
-		 conn (mpd-make-cmd-concat "update" directory))))
+		 conn (mpd-make-cmd-concat "update" path))))
     (and (car output)
 	 (string-to-number (cdr (assoc "updating_db" (cdr output)))))))
 
 ;;;###autoload
-(defun mpd-update (conn &optional directory ignore-timeout)
+(defun mpd-update (conn &optional path ignore-timeout)
   "Instruct the mpd server using CONN to update its database.
-DIRECTORY is the directory or a list of directories to be updated. Note that
-DIRECTORY as nil updates the root directory rather than not updating at all.
-Ignore connection timeout, unless IGNORE-TIMEOUT is nil or the command is
-executed in command list mode. Return update job id on success."
-  (interactive (list mpd-inter-conn (read-string "Enter relative directory: ")))
+PATH is the path or a list of paths to be updated. Note that PATH as nil updates
+the root directory rather than not updating at all. Ignore connection timeout,
+if IGNORE-TIMEOUT is non-nil and the connection is not in command list mode.
+Return update job id on success."
+  (interactive (list mpd-inter-conn (read-string "Enter relative path: ")))
   (if (or (not ignore-timeout) (mpd-command-list-mode-p conn))
-      (mpd-update-1 conn directory)
-    (with-mpd-timeout-disabled (mpd-update-1 conn directory))))
+      (mpd-update-1 conn path)
+    (with-mpd-timeout-disabled (mpd-update-1 conn path))))
 
 (defun mpd-ping (conn)
   "Use connection CONN to ping the mpd server.
