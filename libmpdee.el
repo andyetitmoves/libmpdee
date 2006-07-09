@@ -193,26 +193,26 @@ Most lines in interactive displays are split into two fields."
 
 ;;;; Package independent helper functions.
 
-(defmacro assert-type (obj func)
+(defmacro mpd-assert-type (obj func)
   "Ensure that OBJ succeeds on type checking with predicate FUNC.
 The function emits a \"Wrong type argument\" signal on failure.
 Note that the arguments are evalled twice in this process."
   `(or (,func ,obj) (signal 'wrong-type-argument (list (quote ,func) ,obj))))
 
-(defmacro assert-string (obj) `(assert-type ,obj stringp))
-(defmacro assert-wholenump (obj) `(assert-type ,obj wholenump))
-(defmacro assert-numberp (obj) `(assert-type ,obj numberp))
+(defmacro mpd-assert-string (obj) `(mpd-assert-type ,obj stringp))
+(defmacro mpd-assert-wholenump (obj) `(mpd-assert-type ,obj wholenump))
+(defmacro mpd-assert-numberp (obj) `(mpd-assert-type ,obj numberp))
 
-(defun string-to-number-strict (str &optional allowneg)
+(defun mpd-string-to-number-strict (str &optional allowneg)
   "Convert string STR to a number strictly.
 Return nil if there are any unmatched characters.
 Allow negative numbers if ALLOWNEG is non-nil."
   (let ((num (string-to-number str)))
     (and (if allowneg (numberp num) (wholenump num))
 	 (string-equal str (number-to-string num)) num)))
-(put 'string-to-number-strict 'side-effect-free t)
+(put 'mpd-string-to-number-strict 'side-effect-free t)
 
-(defun get-lines (str)
+(defun mpd-get-lines (str)
   "Split STR into newline separated lines.
 Differ from `split-string' in that tokens are created
 for leading and trailing newlines."
@@ -225,7 +225,7 @@ for leading and trailing newlines."
 	packets))))
 
 ;;; Modified from the pcomplete package.
-(defun sort-uniq-list (l lessp eqp)
+(defun mpd-sort-uniq-list (l lessp eqp)
   "Sort and remove multiples in list L.
 Use LESSP and EQP as predicates for the \"lesser\" and \"equal\" operations."
   (setq l (sort l lessp))
@@ -238,22 +238,22 @@ Use LESSP and EQP as predicates for the \"lesser\" and \"equal\" operations."
 ;;; For edebug macro specifications.
 (eval-when-compile (require 'edebug))
 
-(defmacro with-temp-widen (&rest args)
+(defmacro with-mpd-temp-widen (&rest args)
   "Evaluate ARGS while temporarily widening the current buffer."
   `(save-restriction
      (widen)
      ,@args))
-(put 'with-temp-widen 'lisp-indent-function 0)
-(def-edebug-spec with-temp-widen (body))
+(put 'with-mpd-temp-widen 'lisp-indent-function 0)
+(def-edebug-spec with-mpd-temp-widen (body))
 
-(defmacro with-free-buffer (&rest args)
+(defmacro with-mpd-free-buffer (&rest args)
   "Evaluate ARGS with temporary widening and saved excursion."
   `(save-excursion
-     (with-temp-widen ,@args)))
-(put 'with-free-buffer 'lisp-indent-function 0)
-(def-edebug-spec with-free-buffer (body))
+     (with-mpd-temp-widen ,@args)))
+(put 'with-mpd-free-buffer 'lisp-indent-function 0)
+(def-edebug-spec with-mpd-free-buffer (body))
 
-(defmacro safe-nreverse (list)
+(defmacro mpd-safe-nreverse (list)
   "Reverse LIST if it is a list, leave alone otherwise.
 Note that LIST is evaluated thrice."
   `(if (listp ,list) (nreverse ,list) ,list))
@@ -362,11 +362,11 @@ Return (STR . nil) on a parse failure."
        (wholenump (_mpdgp))))
 (put 'mpd-conn-strongp 'side-effect-free 'error-free)
 
-(defmacro assert-mpd-conn (conn) `(assert-type ,conn mpd-connp))
+(defmacro mpd-assert-mpd-conn (conn) `(mpd-assert-type ,conn mpd-connp))
 
 (defun mpd-assert-idle (conn)
   "Assert mpd connection CONN to be free to receive a command."
-  (assert-mpd-conn conn)
+  (mpd-assert-mpd-conn conn)
   (or (stringp (_mpdgs))
       (error (if (listp (_mpdgs)) "Command list mode has not ended"
 	       "Not done processing current command"))))
@@ -407,8 +407,8 @@ This is an internal function, do not use this in your code."
       (or (eq (_mpdgl) t)
 	  (let ((packets
 		 (if (not (equal status 0))
-		     (get-lines (substring (_mpdgb) 0
-					   (and status (1- status)))))))
+		     (mpd-get-lines (substring (_mpdgb) 0
+					       (and status (1- status)))))))
 	    (if status
 		(progn
 		  (_mpdsb (substring (_mpdgb) status))
@@ -523,7 +523,7 @@ when you are done."
 	  (mpd-end-conn conn "Error parsing version information from server"))
       (let ((i 0))
 	(while (< i mpd-ver-string-length)
-	  (or (aset (_mpdgv) i (string-to-number-strict
+	  (or (aset (_mpdgv) i (mpd-string-to-number-strict
 				(pop verlist)))
 	      (mpd-end-conn
 	       conn "Error parsing version information from server"))
@@ -603,21 +603,21 @@ failure. See also `mpd-execute-command'."
 (defsubst mpd-get-version (conn)
   "Get version information for the mpd server CONN is connected to.
 Return a vector of three numbers, for the major, minor and patch levels."
-  (assert-mpd-conn conn)
+  (mpd-assert-mpd-conn conn)
   (_mpdgv))
 (put 'mpd-get-version 'side-effect-free t)
 
 (defsubst mpd-get-last-error (conn)
   "Get the last server error message for mpd connection CONN.
 Return nil in case of a successful last command."
-  (assert-mpd-conn conn)
+  (mpd-assert-mpd-conn conn)
   (and (not (_mpdgf)) (_mpdgs)))
 (put 'mpd-get-last-error 'side-effect-free t)
 
 (defsubst mpd-get-connection-timeout (conn)
   "Get the timeout of mpd connection CONN.
 Return nil if CONN isn't a mpd connection object."
-  (assert-mpd-conn conn)
+  (mpd-assert-mpd-conn conn)
   (_mpdgt))
 (put 'mpd-get-connection-timeout 'side-effect-free t)
 
@@ -641,7 +641,7 @@ See also `mpd-new-connection'."
   "Return the automatic mode value for mpd connection CONN.
 See `mpd-set-automatic-mode' for a description of automatic mode. Return value
 is like the MODE parameter of that function."
-  (assert-mpd-conn conn)
+  (mpd-assert-mpd-conn conn)
   (_mpdga))
 (put 'mpd-get-automatic-mode 'side-effect-free t)
 
@@ -659,7 +659,7 @@ or 'post. The function is called with 'pre when reconnection is needed. If the
 function returns a non-nil value, it is assumed that the function has done the
 reconnection. Else, the library reconnects by itself, and the function is once
 again called after that, with the parameter 'post (Return value is ignored)."
-  (assert-mpd-conn conn)
+  (mpd-assert-mpd-conn conn)
   (_mpdsa mode))
 
 (make-obsolete 'mpd-get-reconnectible 'mpd-get-automatic-mode "2.1")
@@ -701,7 +701,7 @@ Always return t, as the commands are queued up and not sent to the server.
 
 (defun mpd-command-list-mode-p (conn)
   "Return non-nil if mpd connection CONN is in command list mode."
-  (assert-mpd-conn conn)
+  (mpd-assert-mpd-conn conn)
   (listp (_mpdgs)))
 (put 'mpd-command-list-mode-p 'side-effect-free t)
 
@@ -721,7 +721,7 @@ This function needs to be preceded by a call to `mpd-command-list-begin'."
   "Get the status of mpd connection CONN.
 Return one of 'busy for being in the midst of a request, 'ready for the ready
 state, and 'command-list to indicate being in command-list mode."
-  (assert-mpd-conn conn)
+  (mpd-assert-mpd-conn conn)
   (cond
    ((listp (_mpdgs)) 'command-list)
    ((stringp (_mpdgs)) 'ready)
@@ -730,7 +730,7 @@ state, and 'command-list to indicate being in command-list mode."
 
 (defmacro with-mpd-timeout-disabled (&rest args)
   `(progn
-     (assert-mpd-conn conn)
+     (mpd-assert-mpd-conn conn)
      (let ((timeout (_mpdgt)))
        (unwind-protect
 	   (progn
@@ -777,7 +777,7 @@ be present as well."
     (mpd-execute-command conn cmd 'mpd-song-receiver)
     (and mpd-song-receiver
 	 (setq foreach (mpd-seq-add mpd-song-receiver foreach)))
-    (safe-nreverse foreach)))
+    (mpd-safe-nreverse foreach)))
 
 (defun mpd-make-cmd-concat (cmd arg &optional normal-nil)
   "Make mpd command string using command CMD and argument ARG.
@@ -818,7 +818,7 @@ This is an internal function, do not use this in your code."
 (defun mpd-line-to-buffer (str)
   "Insert STR as a line to the mpd output buffer."
   (with-current-buffer (get-buffer-create "*mpd-output*")
-    (with-free-buffer
+    (with-mpd-free-buffer
       (goto-char (point-max))
       (insert (concat str "\n"))
       (display-buffer (current-buffer)))))
@@ -908,7 +908,7 @@ Output the separating colon unless NOSEP is non-nil."
   "Display a bulleted line to the mpd output buffer."
   (mpd-line-to-buffer (mpd-render-field " o " str t)))
 
-(defun read-item (prompt &optional default zero allowneg)
+(defun mpd-read-item (prompt &optional default zero allowneg)
   "Read a number from the minibuffer.
 Display PROMPT as the prompt string prefix. Append the DEFAULT value,
 if present, in brackets. Return the number read. Unless ZERO is non-nil,
@@ -917,7 +917,7 @@ by 1 before returning. If ALLOWNEG is non-nil, allow negative numbers."
   (let (num str)
     (and default (setq str (number-to-string (if zero default (1+ default)))))
     (setq
-     num (string-to-number-strict
+     num (mpd-string-to-number-strict
 	  (read-string (concat prompt (if default (concat " (" str ")")) ": ")
 		       nil nil str) allowneg))
     (if (and num (not zero)) (1- num) num)))
@@ -1026,7 +1026,7 @@ CONN and FOREACH are as in `mpd-get-songs'."
 		      (setq foreach (mpd-elt-add
 				     (cdr cell) foreach
 				     (string-to-number (car cell))))))
-  (safe-nreverse foreach))
+  (mpd-safe-nreverse foreach))
 
 ;;;###autoload
 (defun mpd-get-playlist-entry (conn &optional item foreach use-id)
@@ -1036,8 +1036,9 @@ ITEM is the item position/id or a list of it. Note that ITEM as nil outputs
 for all entries in the current playlist rather than not doing anything.
 Interpret ITEM as song id(s) iff USE-ID is non-nil."
   (interactive
-   (let ((item (read-item "Enter item number"
-			  (plist-get (mpd-get-status mpd-inter-conn) 'song))))
+   (let ((item (mpd-read-item
+		"Enter item number"
+		(plist-get (mpd-get-status mpd-inter-conn) 'song))))
      (mpd-init-buffer "" (format "MPD Playlist Item # %d" (1+ item)) "")
      (list mpd-inter-conn item 'mpd-display-song)))
   (setq use-id (if use-id "playlistid" "playlistinfo"))
@@ -1045,7 +1046,7 @@ Interpret ITEM as song id(s) iff USE-ID is non-nil."
    conn (if item
 	    (mpd-make-cmd-format
 	     (concat use-id " %d")
-	     '(lambda (item item2) (assert-wholenump item))
+	     '(lambda (item item2) (mpd-assert-wholenump item))
 	     item) use-id) foreach))
 
 ;;;###autoload
@@ -1064,7 +1065,7 @@ CONN, FOREACH and the return value are as in `mpd-get-songs'.
 Calculate the change between the current playlist and the playlist
 with version number VERSION. Do not fetch complete metadata (only position and
 song id is returned for each song) if NOMETA is non-nil."
-  (assert-numberp version)
+  (mpd-assert-numberp version)
   (mpd-get-songs conn (format "%s %d" (if nometa "plchangesposid" "plchanges")
 			      version) foreach))
 
@@ -1128,7 +1129,7 @@ database toplevel rather than an empty list."
      (progn
        (mpd-init-buffer "" (concat "Recursive listing of directory " str) "")
        (list mpd-inter-conn 'mpd-display-dir-listing str))))
-  (assert-type foreach functionp)
+  (mpd-assert-type foreach functionp)
   (mpd-execute-command conn (mpd-make-cmd-concat "listall" directory)
 		       '(lambda (conn cell)
 			  (funcall foreach (cdr cell)
@@ -1170,7 +1171,7 @@ artist names."
    '(lambda (conn cell)
       (and (string-equal (car cell) "Artist")
 	   (setq foreach (mpd-elt-add (cdr cell) foreach)))))
-  (safe-nreverse foreach))
+  (mpd-safe-nreverse foreach))
 
 ;;;###autoload
 (defun mpd-get-artist-albums (conn &optional artist foreach)
@@ -1191,7 +1192,7 @@ else return the list of albums."
    '(lambda (conn cell)
       (and (string-equal (car cell) "Album")
 	   (setq foreach (mpd-elt-add (cdr cell) foreach)))))
-  (safe-nreverse foreach))
+  (mpd-safe-nreverse foreach))
 
 ;;; These are command functions. These functions can be queued by using the
 ;;; command-list mode. See `mpd-command-list-begin' and `mpd-command-list-end'.
@@ -1216,15 +1217,15 @@ to delete as well. If POS is a list and USE-ID is nil, sort it in descending
 order and remove duplicates before proceeding, unless NEVER-SORT is non-nil.
 Note that this is necessary for the correctness of the deletion, and NEVER-SORT
 is only provided in case the arguments already satisfy the condition."
-  (interactive (list mpd-inter-conn (read-item "Enter item to be deleted")))
+  (interactive (list mpd-inter-conn (mpd-read-item "Enter item to be deleted")))
   ;; Deletion changes the playlist ordering of all those below the deleted item.
   ;; Hence, sort and uniquify the list in descending order.
   (and (not (or use-id (not (listp pos)) never-sort))
-       (setq pos (sort-uniq-list pos '> '=)))
+       (setq pos (mpd-sort-uniq-list pos '> '=)))
   (mpd-simple-exec
    conn
    (mpd-make-cmd-format (if use-id "deleteid %d" "delete %d")
-			'(lambda (item ig) (assert-wholenump item)) pos)))
+			'(lambda (item ig) (mpd-assert-wholenump item)) pos)))
 
 ;;;###autoload
 (defun mpd-save-playlist (conn file)
@@ -1261,8 +1262,8 @@ PLNAME could as well be a list of playlist names."
 (defun mpd-play (conn &optional pos use-id)
   "Play song at position/id POS (default first) in the mpd playlist.
 Interpret POS as a song id iff USE-ID is non-nil."
-  (interactive (list mpd-inter-conn (read-item "Enter item to play" 0)))
-  (and pos (assert-wholenump pos))
+  (interactive (list mpd-inter-conn (mpd-read-item "Enter item to play" 0)))
+  (and pos (mpd-assert-wholenump pos))
   (mpd-simple-exec
    conn (concat (if use-id "playid" "play")
 		(and pos (concat " " (number-to-string pos))))))
@@ -1304,15 +1305,15 @@ For lists of FROM and TO, do action in that order for each pair of items.
 Interpret FROM as a list of song ids iff USE-ID is non-nil. Retain TO as a list
 of positions irrespective of the value of USE-ID. If sending a list for FROM and
 TO, note that every move changes the order of items in the playlist."
-  (interactive (list mpd-inter-conn (read-item "Source item number")
-		     (read-item "Destination item number")))
+  (interactive (list mpd-inter-conn (mpd-read-item "Source item number")
+		     (mpd-read-item "Destination item number")))
   (and from to
        (mpd-simple-exec
 	conn (mpd-make-cmd-format
 	      (concat (if use-id "moveid" "move") " %d %d")
 	      '(lambda (i j)
-		 (assert-wholenump i)
-		 (assert-wholenump j))
+		 (mpd-assert-wholenump i)
+		 (mpd-assert-wholenump j))
 	      from to))))
 
 ;;;###autoload
@@ -1321,15 +1322,15 @@ TO, note that every move changes the order of items in the playlist."
 For lists of FROM and TO, do action in that order for each pair of items.
 Interpret FIRST and SECOND as song ids iff USE-ID is non-nil.
 See also `mpd-move'."
-  (interactive (list mpd-inter-conn (read-item "Swap item at number")
-		     (read-item "With item at number")))
+  (interactive (list mpd-inter-conn (mpd-read-item "Swap item at number")
+		     (mpd-read-item "With item at number")))
   (and first second
        (mpd-simple-exec
 	conn (mpd-make-cmd-format
 	      (concat (if use-id "swapid" "swap") " %d %d")
 	      '(lambda (i j)
-		 (assert-wholenump i)
-		 (assert-wholenump j))
+		 (mpd-assert-wholenump i)
+		 (mpd-assert-wholenump j))
 	      first second))))
 
 ;;;###autoload
@@ -1342,11 +1343,11 @@ iff USE-ID is non-nil."
      (and (eq (mpd-connection-status mpd-inter-conn) 'ready)
 	  (setq status (mpd-get-status mpd-inter-conn)))
      (list mpd-inter-conn
-	   (read-item "Seek to song" (and status (plist-get status 'song)))
-	   (read-item "Time in seconds"
-		      (and status (plist-get status 'time-elapsed)) t))))
-  (assert-wholenump song)
-  (if time (assert-wholenump time) (setq time 0))
+	   (mpd-read-item "Seek to song" (and status (plist-get status 'song)))
+	   (mpd-read-item "Time in seconds"
+			  (and status (plist-get status 'time-elapsed)) t))))
+  (mpd-assert-wholenump song)
+  (if time (mpd-assert-wholenump time) (setq time 0))
   (mpd-simple-exec conn (format "%s %d %d"
 				(if use-id "seekid" "seek") song time)))
 
@@ -1373,11 +1374,12 @@ With ARG, set repeat on iff ARG is positive."
   "Set the volume for the mpd player to volume VOL."
   (interactive
    (list mpd-inter-conn
-	 (read-item "New volume"
-		    (and (eq (mpd-connection-status mpd-inter-conn) 'ready)
-			 (plist-get (mpd-get-status mpd-inter-conn) 'volume))
-		    t)))
-  (assert-wholenump vol)
+	 (mpd-read-item
+	  "New volume"
+	  (and (eq (mpd-connection-status mpd-inter-conn) 'ready)
+	       (plist-get (mpd-get-status mpd-inter-conn) 'volume))
+	  t)))
+  (mpd-assert-wholenump vol)
   (mpd-simple-exec conn (format "setvol %d" vol)))
 
 ;;;###autoload
@@ -1385,9 +1387,9 @@ With ARG, set repeat on iff ARG is positive."
   "Adjust the volume for the mpd player by volume VOL.
 If VOL is positive, increase the volume, and decrease otherwise."
   (interactive (list mpd-inter-conn
-		     (string-to-number-strict
+		     (mpd-string-to-number-strict
 		      (read-string "Adjust volume by: ") t)))
-  (assert-numberp vol)
+  (mpd-assert-numberp vol)
   (mpd-simple-exec conn (format "volume %d" vol)))
 
 ;;;###autoload
@@ -1395,10 +1397,10 @@ If VOL is positive, increase the volume, and decrease otherwise."
   "Set cross-fading time for the mpd player to TIME in seconds.
 Turn off cross-fading if TIME is 0."
   (interactive (list mpd-inter-conn
-		     (read-item "New crossfade time in seconds"
-				(plist-get (mpd-get-status mpd-inter-conn)
-					   'xfade) t)))
-  (assert-wholenump time)
+		     (mpd-read-item "New crossfade time in seconds"
+				    (plist-get (mpd-get-status mpd-inter-conn)
+					       'xfade) t)))
+  (mpd-assert-wholenump time)
   (mpd-simple-exec conn (format "crossfade %d" time)))
 
 (defvar mpd-inter-password-remember-queried nil)
@@ -1439,7 +1441,7 @@ for this session, in case it needs to be set again? ")
 	   (setq mpd-inter-password password)))
        (setq mpd-inter-password-remember-queried t))
      (list mpd-inter-conn password)))
-  (assert-string pass)
+  (mpd-assert-string pass)
   (mpd-simple-exec conn (concat "password " (mpd-safe-string pass))))
 
 (defun mpd-update-1 (conn directory)
