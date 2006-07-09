@@ -752,15 +752,17 @@ state, and 'command-list to indicate being in command-list mode."
 See `mpd-execute-command' for a description of output handlers.
 This is an internal function, do not use this in your code."
   (let ((key (car cell)))
-    (when (string-equal key "file")
-      (when (plist-get mpd-song-receiver 'file)
-	(setq foreach (apply 'mpd-seq-add mpd-song-receiver
-			     foreach mpd-song-receiver-args)))
-      (setq mpd-song-receiver nil))
-    (setq mpd-song-receiver
-	  (plist-put mpd-song-receiver (intern key)
-		     (if (member key '("Time" "Pos" "Id"))
-			 (string-to-number (cdr cell)) (cdr cell))))))
+    (unless (or (string-equal key "directory")
+		(string-equal key "playlist"))
+      (when (string-equal key "file")
+	(when (plist-get mpd-song-receiver 'file)
+	  (setq foreach (apply 'mpd-seq-add mpd-song-receiver
+			       foreach mpd-song-receiver-args)))
+	(setq mpd-song-receiver nil))
+      (setq mpd-song-receiver
+	    (plist-put mpd-song-receiver (intern key)
+		       (if (member key '("Time" "Pos" "Id"))
+			   (string-to-number (cdr cell)) (cdr cell)))))))
 
 (defun mpd-get-songs (conn cmd &optional foreach)
   "Get details of songs from the mpd server using connection CONN.
