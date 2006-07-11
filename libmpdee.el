@@ -909,7 +909,7 @@ Output the separating colon unless NOSEP is non-nil."
 
 (defsubst mpd-display-bullet (str)
   "Display a bulleted line to the mpd output buffer."
-  (mpd-line-to-buffer (mpd-render-field " o " str t)))
+  (mpd-line-to-buffer (mpd-render-field " o " (format "%s" str) t)))
 
 (defun mpd-read-item (prompt &optional default zero allowneg)
   "Read a number from the minibuffer.
