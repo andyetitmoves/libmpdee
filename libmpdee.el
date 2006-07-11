@@ -862,29 +862,40 @@ Output the separating colon unless NOSEP is non-nil."
 	       (propertize val 'face 'mpd-second-field-face) "\n")))
 (put 'mpd-render-field 'side-effect-free t)
 
+(defun mpd-render-plist (plist table)
+  "Display property list PLIST as a pretty table in the output buffer.
+TABLE is a list of entries is used to translate between keys and strings
+displayed. Each entry of the table is a list of the key symbol, the
+corresponding string to output, and optionally a function to call with the value
+to get the string to display as the value. If the string to output is nil, then
+those keys are ignored and not output at all."
+  (when plist
+    (let ((ptr plist) (str "") key value entry trans filter)
+      (while ptr
+	(setq key (car ptr))
+	(setq value (cadr ptr))
+	(when (and key value)
+	  (setq entry (assq key table))
+	  (setq trans (if entry (cadr entry) (symbol-name key)))
+	  (setq filter (cadr (cdr entry)))
+	  (when trans
+	    (setq str (concat str (mpd-render-field
+				   (format "%-13s" trans)
+				   (format "%s" (if filter
+						    (funcall filter value)
+						  value)))))))
+	(setq ptr (cddr ptr)))
+      (mpd-line-to-buffer (concat str "\n" (mpd-separator-line))))))
+
 (defconst mpd-display-song-key-table
-  '((Time "Length" " seconds")
+  '((Time "Length" (lambda (time) (format "%s seconds" time)))
     (file "Filename")
     (Pos)
     (Id)))
 
-(defun mpd-display-song (song)
+(defsubst mpd-display-song (song)
   "Display mpd song data SONG in the output buffer."
-  (when song
-    (let ((sptr song) (str "") key value entry trans suffix)
-      (while sptr
-	(setq key (car sptr))
-	(setq value (cadr sptr))
-	(when (and key value)
-	  (setq entry (assq key mpd-display-song-key-table))
-	  (setq trans (if entry (cadr entry) (symbol-name key)))
-	  (setq suffix (or (nth 2 entry) ""))
-	  (when trans
-	    (setq str (concat str (mpd-render-field
-				   (format "%-13s" trans)
-				   (format "%s%s" value suffix))))))
-	(setq sptr (cddr sptr)))
-      (mpd-line-to-buffer (concat str "\n" (mpd-separator-line))))))
+  (mpd-render-plist song mpd-display-song-key-table))
 
 (defun mpd-display-playlist-item (title num)
   "Display playlist item with TITLE and index NUM in mpd buffer."
