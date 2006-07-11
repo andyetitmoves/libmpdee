@@ -40,9 +40,9 @@
 ;;
 ;;      - This package contains quite a bit of higher level functionality as
 ;;      compared with the original. An action or a query needs only a single
-;;      call and the library user can choose to get either the raw output, the
-;;      formatted output, or hook on a callback for each logical token of the
-;;      output. However, dig deeper, and you will find the lower level
+;;      call and the library user can choose to get either the raw response, the
+;;      formatted response, or hook on a callback for each logical token of the
+;;      response. However, dig deeper, and you will find the lower level
 ;;      functionality available as well.
 ;;      - The error throwing scheme consistent with what is expected of elisp
 ;;      programs.
@@ -51,12 +51,12 @@
 ;;      or a list of it for each argument.
 ;;      - Apart from this, command list functionality is limited to actions
 ;;      rather than queries, as it is anyway not that easy to parse out the
-;;      individual outputs from command-list queries (it is firstly possible
-;;      only from 0.11, which allows for a list_OK to be output at the end of
-;;      each command in the list).
+;;      individual responses from command-list queries (it is firstly possible
+;;      only from 0.11, which allows for a list_OK to be added at the end of
+;;      response for each command in the list).
 ;;      - command_list_ok_begin isn't implemented. It is still possible to
 ;;      explicitly use "command_list_(ok)begin\n..\ncommand_list_end" for
-;;      `mpd-execute-command' and get the output tokens for queries. A better
+;;      `mpd-execute-command' and get the response tokens for queries. A better
 ;;      interface may be available in the future.
 ;;      - There is a small interactive interface as well, but this is
 ;;      intentionally incomplete. The point is that this exists only to the
@@ -442,13 +442,13 @@ This is an internal function, do not use this in your code."
 		 (+ resp-end (if (_mpdsf (eq (aref (_mpdgb) resp-end)?O)) 2 4))
 		 bufend))
 	(_mpdsb (substring (_mpdgb) 0 resp-end))
-	(throw 'mpd-output-over nil))))))
+	(throw 'mpd-response-over nil))))))
 
 (defun mpd-transact (conn &optional mode input)
   "Do an I/O transacton with the mpd server.
 Use connection CONN for contacting the server. MODE is as described in
 `mpd-execute-command'. Send INPUT, if non-nil, to the server before waiting for
-the output. This is an internal function, do not use this in your code."
+the response. This is an internal function, do not use this in your code."
   (_mpdsb "")
   (_mpdsl mode)
   (_mpdss t)
@@ -456,7 +456,7 @@ the output. This is an internal function, do not use this in your code."
       (let ((timeout (_mpdgt)))
 	(and input (process-send-string (_mpdgo) input))
 	(while (not (stringp (_mpdgs)))
-	  (catch 'mpd-output-over
+	  (catch 'mpd-response-over
 	    (or (accept-process-output
 		 (_mpdgo) (and timeout (/ timeout 1000))
 		 (and timeout (mod timeout 1000)))
@@ -558,18 +558,18 @@ If automatic mode is not used, a call to `mpd-connect' might be necessary."
 (defun mpd-execute-command (conn cmd &optional mode)
   "Send the command CMD to the mpd server using CONN.
 Append a newline to CMD before sending to the server. Use the value of MODE to
-decide how the output of the command is processed. MODE could take one of the
+decide how the response of the command is processed. MODE could take one of the
 following values:
  - A list, usually nil, to which cons-cells got by formatting each line
-   of the output, except the last one, using `mpd-parse-line', are appended.
-   The new list thus got is the output of the function.
- - t, by which all output before the last line, as a string,
-   is the output of the function.
+   of the response, except the last one, using `mpd-parse-line', are appended.
+   The new list thus got is the result of the function.
+ - t, by which all response before the last line, as a string,
+   is the result of the function.
  - A function, by which each cons-cell, got as described above, is sent to
    this function. Two parameters are passed to the function, the connection
-   object and this cons-cell. An empty string is the output.
+   object and this cons-cell. An empty string is the result.
 Return a cons-cell, whose car is non-nil if the server succeeds, and cdr is the
-output as specified in the description of MODE above."
+result as specified in the description of MODE above."
   (mpd-conn-wakeup conn)
   (mpd-transact conn mode (concat cmd "\n"))
   (prog1
@@ -580,7 +580,7 @@ output as specified in the description of MODE above."
     (_mpdsb "")))
 
 (defun mpd-simple-exec (conn cmd)
-  "Execute mpd command CMD using CONN ignoring output.
+  "Execute mpd command CMD using CONN ignoring response.
 Note that an OK/ACK message still has to come. Return non-nil iff the command
 succeeds. `mpd-get-last-error' gives the server error message in case of
 failure. See also `mpd-execute-command'."
@@ -681,9 +681,9 @@ Use `mpd-set-automatic-mode' instead."
   "Force the mpd connection CONN to accept the next command.
 *WARNING* DON'T use this unless you are really desperate. Shelf this off for
 debugging purposes. Normally, the package should signal correctly whether it is
-safe to receive the next command. Doing this would mean losing out on the
-output of the current command, and worse, the output of the aborted command
-could creep into the current one."
+safe to receive the next command. Doing this could mean losing out on the
+response of the current command, and worse, the response of the current command
+could creep into the next one."
   (if (mpd-command-list-mode-p conn)
       (error "Command list mode has not ended")
     (_mpdsf nil)
@@ -749,8 +749,8 @@ state, and 'command-list to indicate being in command-list mode."
 (defvar mpd-song-receiver-args)
 
 (defun mpd-song-receiver (conn cell)
-  "Handle song data output from the mpd server.
-See `mpd-execute-command' for a description of output handlers.
+  "Handle song data response from the mpd server.
+See `mpd-execute-command' for a description of response handlers.
 This is an internal function, do not use this in your code."
   (let ((key (car cell)))
     (unless (or (string-equal key "directory")
@@ -785,7 +785,7 @@ be present as well."
 (defun mpd-make-cmd-concat (cmd arg &optional normal-nil)
   "Make mpd command string using command CMD and argument ARG.
 ARG could be a string or a list of strings. If NORMAL-NIL is non-nil, do nothing
-if ARG is nil, and output CMD for nil NORMAL-NIL and ARG. Use command list
+if ARG is nil, and return CMD for nil NORMAL-NIL and ARG. Use command list
 mode implicitly for lists. Sanitize arguments before composition.
 This is an internal function, do not use this in your code."
   (cond
@@ -819,21 +819,21 @@ This is an internal function, do not use this in your code."
 ;;; Helper functions for interactive display.
 
 (defun mpd-line-to-buffer (str)
-  "Insert STR as a line to the mpd output buffer."
-  (with-current-buffer (get-buffer-create "*mpd-output*")
+  "Insert STR as a line to the mpd display buffer."
+  (with-current-buffer (get-buffer-create "*mpd-display*")
     (with-mpd-free-buffer
       (goto-char (point-max))
       (insert (concat str "\n"))
       (display-buffer (current-buffer)))))
 
 (defsubst mpd-separator-line (&optional num)
-  "Make a separator line for insertion to the mpd output buffer.
+  "Make a separator line for insertion to the mpd display buffer.
 The number of columns used is 80, unless specified using NUM."
   (propertize (concat (make-string (or num 80) ?*) "\n")
 	      'face 'mpd-separator-face))
 
 (defun mpd-init-buffer (&optional str1 str2 str3)
-  "Initialize the mpd output buffer using strings STR1, STR2, STR3.
+  "Initialize the mpd display buffer using strings STR1, STR2, STR3.
 Layout as follows:
 	STR1 		if non-empty
 	***...*** 	if STR1 is non-nil
@@ -841,7 +841,7 @@ Layout as follows:
 	***...*** 	if STR2 is non-nil
 	STR3		if non-empty"
   (let ((max (max (length str1) (length str2) (length str3))))
-    (with-current-buffer (get-buffer-create "*mpd-output*")
+    (with-current-buffer (get-buffer-create "*mpd-display*")
       (erase-buffer)
       (insert
        (concat "\n" (and str1 (not (string-equal str1 ""))
@@ -855,7 +855,7 @@ Layout as follows:
 
 (defun mpd-render-field (desc val &optional nosep)
   "Format to a colorized line of form \"\\nDESC: VAL\".
-Output the separating colon unless NOSEP is non-nil."
+Include the separating colon unless NOSEP is non-nil."
   (and val (not (string-equal val ""))
        (concat (propertize desc 'face 'mpd-first-field-face)
 	       (and (not nosep) ": ")
@@ -863,12 +863,12 @@ Output the separating colon unless NOSEP is non-nil."
 (put 'mpd-render-field 'side-effect-free t)
 
 (defun mpd-render-plist (plist table)
-  "Display property list PLIST as a pretty table in the output buffer.
+  "Display property list PLIST as a pretty table in the display buffer.
 TABLE is a list of entries is used to translate between keys and strings
 displayed. Each entry of the table is a list of the key symbol, the
-corresponding string to output, and optionally a function to call with the value
-to get the string to display as the value. If the string to output is nil, then
-those keys are ignored and not output at all."
+corresponding string to display, and optionally a function to call with the
+value to get the string to display as the value. If the string to display is
+nil, then those keys are ignored and not displayed at all."
   (when plist
     (let ((ptr plist) (str "") key value entry trans filter)
       (while ptr
@@ -894,7 +894,7 @@ those keys are ignored and not output at all."
     (Id)))
 
 (defsubst mpd-display-song (song)
-  "Display mpd song data SONG in the output buffer."
+  "Display mpd song data SONG in the mpd display buffer."
   (mpd-render-plist song mpd-display-song-key-table))
 
 (defun mpd-display-playlist-item (title num)
@@ -904,7 +904,7 @@ those keys are ignored and not output at all."
 	   (propertize title 'face 'mpd-second-field-face))))
 
 (defun mpd-display-dir-info (item type)
-  "Display mpd directory information to the output buffer."
+  "Display mpd directory information to the mpd display buffer."
   (if (eq type 'file)
       (mpd-display-song item)
     (mpd-line-to-buffer
@@ -913,13 +913,13 @@ those keys are ignored and not output at all."
 	     "\n" (mpd-separator-line)))))
 
 (defun mpd-display-dir-listing (item dir)
-  "Display mpd directory listing to the output buffer."
+  "Display mpd directory listing to the mpd display buffer."
   (mpd-line-to-buffer
    (concat (mpd-render-field (if dir "Directory " "File      " ) item)
 	   "\n" (mpd-separator-line))))
 
 (defsubst mpd-display-bullet (str)
-  "Display a bulleted line to the mpd output buffer."
+  "Display a bulleted line to the mpd display buffer."
   (mpd-line-to-buffer (mpd-render-field " o " (format "%s" str) t)))
 
 (defun mpd-read-item (prompt &optional default zero allowneg)
@@ -938,12 +938,12 @@ by 1 before returning. If ALLOWNEG is non-nil, allow negative numbers."
 
 ;;;; High level public interface.
 
-;;;  These functions require output, and hence cannot be queued by using the
+;;;  These functions require response, and hence cannot be queued by using the
 ;;;  command-line mode.
 
 (defun mpd-status-receiver (lsym cell)
-  "Handle output for the 'status' command to the mpd server.
-See `mpd-execute-command' for a description of output handlers.
+  "Handle response for the 'status' command to the mpd server.
+See `mpd-execute-command' for a description of response handlers.
 This is an internal function, do not use this in your code."
   (let ((sym (car cell)))
     (cond
@@ -1003,8 +1003,8 @@ in addition, bi-state variables (0/1)"
   (symbol-plist 'mpd-get-status-local-sym))
 
 (defun mpd-stats-receiver (lsym cell)
-  "Handle output for the 'stats' command to the mpd server.
-See `mpd-execute-command' for a description of output handlers.
+  "Handle response for the 'stats' command to the mpd server.
+See `mpd-execute-command' for a description of response handlers.
 This is an internal function, do not use this in your code."
   (let ((sym (car cell)))
     (cond
@@ -1046,8 +1046,8 @@ CONN and FOREACH are as in `mpd-get-songs'."
 (defun mpd-get-playlist-entry (conn &optional item foreach use-id)
   "Get song data for entr(y/ies) ITEM in the current mpd playlist.
 CONN, FOREACH and the return value are as in `mpd-get-songs'.
-ITEM is the item position/id or a list of it. Note that ITEM as nil outputs
-for all entries in the current playlist rather than not doing anything.
+ITEM is the item position/id or a list of it. Note that ITEM as nil fetches
+data for all entries in the current playlist rather than not doing anything.
 Interpret ITEM as song id(s) iff USE-ID is non-nil."
   (interactive
    (let ((item (mpd-read-item
@@ -1461,10 +1461,10 @@ for this session, in case it needs to be set again? ")
 (defun mpd-update-1 (conn path)
   "Internal function instructing the mpd server to update.
 Please use `mpd-update' for updation purposes."
-  (let ((output (mpd-execute-command
-		 conn (mpd-make-cmd-concat "update" path))))
-    (and (car output)
-	 (string-to-number (cdr (assoc "updating_db" (cdr output)))))))
+  (let ((response (mpd-execute-command
+		   conn (mpd-make-cmd-concat "update" path))))
+    (and (car response)
+	 (string-to-number (cdr (assoc "updating_db" (cdr response)))))))
 
 ;;;###autoload
 (defun mpd-update (conn &optional path ignore-timeout)
