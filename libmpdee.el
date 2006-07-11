@@ -143,10 +143,10 @@ Replace parameters in the MPD connection VAL with sane defaults and return."
 	       (string :format "%t: %v\n" :tag "Hostname" :size 15)
 	       (integer :format "%t:     %v\n" :tag "Port" :size 5
 			:match (lambda (widget value) (> value 0))
-			:type-error "Port number must be a natural number")
+			:type-error "Port must be a natural number")
 	       (float :format "%t:  %v\n\n" :tag "Timeout" :size 10
 		      :match (lambda (widget value) (> value 0))
-		      :type-error "Timeout must be a positive number.")))
+		      :type-error "Timeout must be a positive number")))
 
 (defgroup mpd nil
   "The client end library for MPD, the music playing daemon."
@@ -546,7 +546,7 @@ If automatic mode is not used, a call to `mpd-connect' might be necessary."
     (mpd-connect conn) conn))
 
 (defun mpd-conn-wakeup (conn)
-  "Tries to ensure that the MPD connection is alive, when in automatic mode."
+  "Try to ensure that the MPD connection is alive, when in automatic mode."
   (mpd-assert-idle conn)
   (when (and (not (and (_mpdgo) (eq (process-status (_mpdgo)) 'open)))
 	     (_mpdga) (not (and (functionp (_mpdga))
