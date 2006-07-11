@@ -922,6 +922,20 @@ nil, then those keys are ignored and not displayed at all."
   "Display a bulleted line to the mpd display buffer."
   (mpd-line-to-buffer (mpd-render-field " o " (format "%s" str) t)))
 
+(defconst mpd-display-output-key-table
+  '((outputid "ID")
+    (outputname "Name")
+    (outputenabled "Enabled"
+		   (lambda (enabled)
+		     (cond
+		      ((eq enabled t) "Yes")
+		      ((eq enabled nil) "No")
+		      (t enabled))))))
+
+(defsubst mpd-display-output (output)
+  "Display mpd output OUTPUT in the mpd display buffer."
+  (mpd-render-plist output mpd-display-output-key-table))
+
 (defun mpd-read-item (prompt &optional default zero allowneg)
   "Read a number from the minibuffer.
 Display PROMPT as the prompt string prefix. Append the DEFAULT value,
@@ -1208,6 +1222,65 @@ else return the list of albums."
 	   (setq foreach (mpd-elt-add (cdr cell) foreach)))))
   (mpd-safe-nreverse foreach))
 
+;;;###autoload
+(defun mpd-get-handled-remote-url-prefixes (conn &optional foreach)
+  "Use CONN to query remote URL prefixes handled by the mpd server.
+Call function FOREACH, if specified, with each prefix.
+If FOREACH is a function, return FOREACH, else return the URL prefixes."
+  (interactive
+   (progn
+     (mpd-init-buffer "" "List of remote URL prefixes handled" "")
+     (list mpd-inter-conn 'mpd-display-bullet)))
+  (or (functionp foreach) (setq foreach nil))
+  (mpd-execute-command
+   conn "urlhandlers"
+   '(lambda (conn cell)
+      (and (string-equal (car cell) "handler")
+	   (setq foreach (mpd-elt-add (cdr cell) foreach)))))
+  (mpd-safe-nreverse foreach))
+
+(defvar mpd-output-receiver)
+
+(defun mpd-output-receiver (conn cell)
+  "Handle output descriptions from the mpd server.
+See `mpd-execute-command' for a description of response handlers.
+This is an internal function, do not use this in your code."
+  (let ((key (car cell)))
+    (when (string-equal key "outputid")
+      (when (plist-get mpd-output-receiver 'outputid)
+	(setq foreach (apply 'mpd-seq-add mpd-output-receiver foreach)))
+      (setq mpd-output-receiver nil))
+    (setq mpd-output-receiver
+	  (plist-put mpd-output-receiver (intern key)
+		     (cond
+		      ((string-equal key "outputid")
+		       (string-to-number (cdr cell)))
+		      ((string-equal key "outputenabled")
+		       (cond
+			((string-equal (cdr cell) "0") nil)
+			((string-equal (cdr cell) "1") t)
+			(t (cdr cell))))
+		      (t (cdr cell)))))))
+
+;;;###autoload
+(defun mpd-get-outputs (conn &optional foreach)
+  "Get output descriptions from the mpd server using connection CONN.
+Call function FOREACH, if specified, for each output, with the output provided
+as the argument. Return list of all outputs if FOREACH is not specified and
+FOREACH otherwise. When a list is returned, each element of the list is a
+property list, some known keys being `outputid' (integer), `outputname' (string)
+and `outputenabled' (boolean)."
+  (interactive
+   (progn
+     (mpd-init-buffer "" "List of outputs" "")
+     (list mpd-inter-conn 'mpd-display-output)))
+  (or (functionp foreach) (setq foreach nil))
+  (let (mpd-output-receiver)
+    (mpd-execute-command conn "outputs" 'mpd-output-receiver)
+    (and mpd-output-receiver
+	 (setq foreach (mpd-seq-add mpd-output-receiver foreach)))
+    (mpd-safe-nreverse foreach)))
+
 ;;; These are command functions. These functions can be queued by using the
 ;;; command-list mode. See `mpd-command-list-begin' and `mpd-command-list-end'.
 
@@ -1477,6 +1550,20 @@ Return update job id on success."
   (if (or (not ignore-timeout) (mpd-command-list-mode-p conn))
       (mpd-update-1 conn path)
     (with-mpd-timeout-disabled (mpd-update-1 conn path))))
+
+;;;###autoload
+(defun mpd-output-enable (conn id)
+  "Use connection CONN to enable mpd output ID."
+  (interactive (list mpd-inter-conn (mpd-read-item "Output ID" 0 t)))
+  (mpd-assert-wholenump id)
+  (mpd-simple-exec conn (format "enableoutput %d" id)))
+
+;;;###autoload
+(defun mpd-output-disable (conn id)
+  "Use connection CONN to disable mpd output ID."
+  (interactive (list mpd-inter-conn (mpd-read-item "Output ID" 0 t)))
+  (mpd-assert-wholenump id)
+  (mpd-simple-exec conn (format "disableoutput %d" id)))
 
 (defun mpd-ping (conn)
   "Use connection CONN to ping the mpd server.
