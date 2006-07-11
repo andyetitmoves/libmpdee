@@ -604,6 +604,7 @@ failure. See also `mpd-execute-command'."
   "Get version information for the mpd server CONN is connected to.
 Return a vector of three numbers, for the major, minor and patch levels."
   (mpd-assert-mpd-conn conn)
+  (or (aref (_mpdgv) 0) (mpd-conn-wakeup conn))
   (_mpdgv))
 (put 'mpd-get-version 'side-effect-free t)
 
