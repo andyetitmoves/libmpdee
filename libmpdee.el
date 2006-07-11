@@ -629,10 +629,10 @@ See also `mpd-new-connection'."
   (interactive
    (list mpd-inter-conn
 	 (string-to-number
-	  (read-string "Connection timeout (None): "
-		       (let ((conn mpd-inter-conn))
-			 (or conn (error "Connection not yet started"))
-			 (and (_mpdgt) (number-to-string (_mpdgt))))))))
+	  (read-string
+	   "Connection timeout (None): "
+	   (let ((timeout (mpd-get-connection-timeout mpd-inter-conn)))
+	     (and timeout (number-to-string timeout)))))))
   (if (or (not (mpd-connp conn)) (and timeout (not (numberp timeout))))
       (error "Invalid parameters used to set connection timeout")
     (and (= timeout 0) (setq timeout nil))
