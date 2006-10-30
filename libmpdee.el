@@ -1284,17 +1284,32 @@ and `outputenabled' (boolean)."
 ;;; These are command functions. These functions can be queued by using the
 ;;; command-list mode. See `mpd-command-list-begin' and `mpd-command-list-end'.
 
+(defun mpd-file-to-mpd-resource (file)
+  "Convert FILE to a resource string understood by mpd."
+  (let ((prefixes
+	 (mpd-get-handled-remote-url-prefixes mpd-inter-conn)) length)
+    (catch
+	'mpd-enqueue-is-url
+      (while prefixes
+	(setq length (length (car prefixes)))
+	(and (>= (length file) length)
+	     (string-equal (substring file 0 length) (car prefixes))
+	     (throw 'mpd-enqueue-is-url file))
+	(setq prefixes (cdr prefixes)))
+      (file-relative-name file mpd-db-root))))
+
 ;;;###autoload
-(defun mpd-enqueue (conn file)
-  "Enqueue filename FILE (or list of FILE) to the mpd playlist."
+(defun mpd-enqueue (conn res)
+  "Enqueue resource RES (or list of RES) to the mpd playlist.
+Each of RES can be a file or a directory in the mpd database, or an URL."
   (interactive
    (list mpd-inter-conn
 	 (if (and (stringp mpd-db-root) (not (string-equal mpd-db-root "")))
-	     (file-relative-name
-	      (file-truename
-	       (read-file-name "Enqueue what: " mpd-db-root)) mpd-db-root)
+	     (mpd-file-to-mpd-resource
+	      (read-file-name "Enqueue what: "
+			      (file-name-as-directory mpd-db-root)))
 	   (read-string "Enqueue what: "))))
-  (mpd-simple-exec conn (mpd-make-cmd-concat "add" file)))
+  (mpd-simple-exec conn (mpd-make-cmd-concat "add" res)))
 
 ;;;###autoload
 (defun mpd-delete (conn pos &optional use-id never-sort)
