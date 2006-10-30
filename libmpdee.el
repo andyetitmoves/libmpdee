@@ -460,6 +460,9 @@ the response. This is an internal function, do not use this in your code."
 	    (or (accept-process-output
 		 (_mpdgo) (and timeout (/ timeout 1000))
 		 (and timeout (mod timeout 1000)))
+		;; This essentially reduces the probability of timeout due to
+		;; program suspension to a really small probability.
+		(accept-process-output (_mpdgo) 0 0)
 		(error "Timed out getting a response from the mpd server")))))
     (unless (stringp (_mpdgs))
       (_mpdsf nil)
