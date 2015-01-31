@@ -1,4 +1,4 @@
-;;; LIBMPDEE.EL --- Client end library for mpd, a music playing daemon
+;;; libmpdee.el --- Client end library for mpd, a music playing daemon
 
 ;; Copyright (C) 2004-2014 Ramkumar R. Aiyengar
 
@@ -1636,4 +1636,4 @@ Please remove these instructions from your message.")
 
 (provide 'libmpdee)
 
-;;; LIBMPDEE.EL ends here
+;;; libmpdee.el ends here
