@@ -1,8 +1,8 @@
 ;;; LIBMPDEE.EL --- Client end library for mpd, a music playing daemon
 
-;; Copyright (C) 2004, 2005, 2006 R.Ramkumar
+;; Copyright (C) 2004-2014 Ramkumar R. Aiyengar
 
-;; Author: 	R.Ramkumar <andyetitmoves@gmail.com>
+;; Author: 	Ramkumar R. Aiyengar <andyetitmoves@gmail.com>
 ;; Created: 	10 May 2004
 ;; Version: 	2.1
 ;; Keywords:	music, mpd
