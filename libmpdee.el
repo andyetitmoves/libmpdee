@@ -1475,6 +1475,15 @@ With ARG, set repeat on iff ARG is positive."
   (mpd-simple-exec conn (concat "repeat " (if arg "1" "0"))))
 
 ;;;###autoload
+(defun mpd-toggle-single (conn &optional arg)
+  "Change single mode of mpd using CONN.
+With ARG, set single on iff ARG is positive."
+  (interactive (list mpd-inter-conn current-prefix-arg))
+  (setq arg (if arg (> (prefix-numeric-value arg) 0)
+	      (string-equal (plist-get (mpd-get-status conn) 'single) "0")))
+  (mpd-simple-exec conn (concat "single " (if arg "1" "0"))))
+
+;;;###autoload
 (defun mpd-set-volume (conn vol)
   "Set the volume for the mpd player to volume VOL."
   (interactive
