@@ -290,7 +290,7 @@ Return (STR . nil) on a parse failure."
 	  ;; so place start a character beyond end of match.
 	  (setq start (1+ (match-end 0)))
 	  (setq str (replace-match "\\\\\\&" t nil str)))
-	(if (string-match " " str) (concat "\"" str "\"") str))))
+	(if (string-match "[ ']" str) (concat "\"" str "\"") str))))
 
 ;;; (defun mpd-log (fmt &rest args)
 ;;;   (write-region (concat (apply 'format fmt args) "\n") nil "~/mpd.log" t 1))
