@@ -421,11 +421,11 @@ This is an internal function, do not use this in your code."
 		(setq packets nil)))
 	    (cond
 	     ((functionp (_mpdgl))
-	      (mapcar '(lambda (str)
-			 (funcall (_mpdgl) conn (mpd-parse-line str)))
+	      (mapcar #'(lambda (str)
+			  (funcall (_mpdgl) conn (mpd-parse-line str)))
 		      packets))
 	     ((listp (_mpdgl))
-	      (_mpdsl (nconc (mapcar 'mpd-parse-line packets) (_mpdgl))))
+	      (_mpdsl (nconc (mapcar #'mpd-parse-line packets) (_mpdgl))))
 	     (t (error "Invalid line mode filter")))))
       (when status
 	(_mpdss status)
@@ -716,7 +716,7 @@ This function needs to be preceded by a call to `mpd-command-list-begin'."
       (error "The connection is not in command-list mode"))
   (let (str)
     (setq str (concat "command_list_begin\n"
-		      (mapconcat '(lambda (item) item) (nreverse (_mpdgs)) "\n")
+		      (mapconcat #'(lambda (item) item) (nreverse (_mpdgs)) "\n")
 		      "\ncommand_list_end"))
     (_mpdss "")
     (mpd-simple-exec conn str)))
@@ -795,7 +795,7 @@ This is an internal function, do not use this in your code."
    ((not (or arg normal-nil)) cmd)
    ((listp arg)
     (concat "command_list_begin\n"
-	    (mapconcat '(lambda (item) (concat cmd " " (mpd-safe-string item)))
+	    (mapconcat #'(lambda (item) (concat cmd " " (mpd-safe-string item)))
 		       arg "\n") "\ncommand_list_end"))
    (t (concat cmd " " (mpd-safe-string arg)))))
 (put 'mpd-make-cmd-concat 'side-effect-free t)
@@ -810,11 +810,11 @@ This is an internal function, do not use this in your code."
 	(and arg2 (or (= (length arg1) (length arg2))
 		      (error "Argument lists are of unequal lengths")))
 	(concat "command_list_begin\n"
-		(mapconcat '(lambda (item)
-			      (and validate (funcall validate item (car tail2)))
-			      (prog1
-				  (format cmd item (car tail2))
-				(setq tail2 (cdr tail2)))) arg1 "\n")
+		(mapconcat #'(lambda (item)
+			       (and validate (funcall validate item (car tail2)))
+			       (prog1
+				   (format cmd item (car tail2))
+				 (setq tail2 (cdr tail2)))) arg1 "\n")
 		"\ncommand_list_end"))
     (and validate (funcall validate arg1 arg2))
     (format cmd arg1 arg2)))
