@@ -4,7 +4,7 @@
 
 ;; Author: 	Ramkumar R. Aiyengar <andyetitmoves@gmail.com>
 ;; Created: 	10 May 2004
-;; Version: 	2.1
+;; Version: 	2.2
 ;; Keywords:	music, mpd
 
 ;; This file is *NOT* part of GNU Emacs
