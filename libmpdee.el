@@ -351,6 +351,11 @@ Return (STR . nil) on a parse failure."
   (and (vectorp conn) (= (length conn) 10)))
 (put 'mpd-connp 'side-effect-free 'error-free)
 
+(defun mpd-conn-unixdomainp (conn)
+  (or (string-prefix-p "/" (_mpdgh))
+      (string-prefix-p "@" (_mpdgh))  ;; Abstract unix domain socket support is untested.
+      (string-prefix-p "~" (_mpdgh))))
+
 (defun mpd-conn-strongp (conn)
   (and (mpd-connp conn)
        (vectorp (_mpdgv))
@@ -502,7 +507,13 @@ function doesn't need to be explicitly called when the connection is in
 automatic mode (the default). Close the connection using `mpd-close-connection'
 when you are done."
   (let (proc rt welc)
-    (setq proc (or (open-network-stream "mpd" nil (_mpdgh) (_mpdgp))
+    (setq proc (or (if (mpd-conn-unixdomainp conn)
+                       (make-network-process :name "mpd" :family 'local
+                                             :service (if (string-prefix-p "@" (_mpdgh))
+                                                          (_mpdgh)
+                                                        (expand-file-name (_mpdgh))))
+                     (open-network-stream "mpd" nil (_mpdgh) (_mpdgp)))
+                (open-network-stream "mpd" nil (_mpdgh) (_mpdgp))
 		   (error "Unable to open connection with mpd")))
     (and (_mpdgo) (delete-process (_mpdgo)))
     (_mpdso proc)
